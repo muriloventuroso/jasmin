@@ -33,13 +33,14 @@ class SMPPClientSMListener(object):
         self.config = config
         self.SMPPClientFactory = SMPPClientFactory
         self.SMPPOperationFactory = SMPPOperationFactory(self.SMPPClientFactory.config)
+        self.cid = self.SMPPClientFactory.config.id
         self.amqpBroker = amqpBroker
         self.redisClient = redisClient
         self.memcachedClient = memcachedClient
         self.RouterPB = RouterPB
         self.interceptorpb_client = interceptorpb_client
         self.submit_sm_q = None
-        self.qos_last_submit_sm_at = None
+        self.qos_last_submit_sm_at = self.memcachedClient.get('last_submit:%s' % str(self.cid))
         self.rejectTimers = {}
         self.submit_retrials = {}
         self.qosTimer = None
@@ -166,6 +167,7 @@ class SMPPClientSMListener(object):
                     defer.returnValue(False)
 
                 self.qos_last_submit_sm_at = datetime.now()
+                self.memcachedClient.set('last_submit:%s' % str(self.cid), self.qos_last_submit_sm_at)
 
             # Verify if message is a SubmitSm PDU
             if isinstance(SubmitSmPDU, SubmitSM) is False:
