@@ -30,6 +30,7 @@ class SMPPClientManagerPB(pb.Avatar):
         self.config = SMPPClientPBConfig
         self.avatar = None
         self.redisClient = None
+        self.memcachedClient = None
         self.amqpBroker = None
         self.interceptorpb_client = None
         self.RouterPB = None
@@ -74,6 +75,11 @@ class SMPPClientManagerPB(pb.Avatar):
         self.redisClient = redisClient
 
         self.log.info('Added Redis Client to SMPPClientManagerPB')
+
+    def addMemcachedClient(self, memcachedClient):
+        self.memcachedClient = memcachedClient
+
+        self.log.info('Added Memcached Client to SMPPClientManagerPB')
 
     def addInterceptorPBClient(self, interceptorpb_client):
         self.interceptorpb_client = interceptorpb_client
@@ -256,6 +262,7 @@ class SMPPClientManagerPB(pb.Avatar):
             SMPPClientFactory=serviceManager.SMPPClientFactory,
             amqpBroker=self.amqpBroker,
             redisClient=self.redisClient,
+            memcachedClient=self.memcachedClient,
             RouterPB=self.RouterPB,
             interceptorpb_client=self.interceptorpb_client)
 

@@ -29,12 +29,13 @@ class SMPPClientSMListener(object):
     SubmitSm, DeliverSm and SubmitSm PDUs for a given SMPP connection
     """
 
-    def __init__(self, config, SMPPClientFactory, amqpBroker, redisClient, RouterPB=None, interceptorpb_client=None):
+    def __init__(self, config, SMPPClientFactory, amqpBroker, redisClient, memcachedClient, RouterPB=None, interceptorpb_client=None):
         self.config = config
         self.SMPPClientFactory = SMPPClientFactory
         self.SMPPOperationFactory = SMPPOperationFactory(self.SMPPClientFactory.config)
         self.amqpBroker = amqpBroker
         self.redisClient = redisClient
+        self.memcachedClient = memcachedClient
         self.RouterPB = RouterPB
         self.interceptorpb_client = interceptorpb_client
         self.submit_sm_q = None
@@ -251,7 +252,7 @@ class SMPPClientSMListener(object):
 
     @defer.inlineCallbacks
     def submit_sm_resp_event(self, r, amqpMessage):
-        msgid = amqpMessage.content.properties['message-id']
+        msgid = amqpMessage.content.properties['message-id'].lower()
         total_bill_amount = None
         will_be_retried = False
 
