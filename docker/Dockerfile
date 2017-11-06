@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y \
     rabbitmq-server \
     redis-server \
     supervisor \
+    memcached \
+    git \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
@@ -26,7 +28,7 @@ RUN mkdir -p /etc/jasmin/resource \
     /var/log/jasmin \
   && chown jasmin:jasmin /etc/jasmin/store \
     /var/log/jasmin \
-  && pip install --pre jasmin=="$JASMIN_VERSION"
+  && pip install --pre git+https://github.com/muriloventuroso/jasmin.git
 
 # Change binding host for jcli
 RUN sed -i '/\[jcli\]/a bind=0.0.0.0' /etc/jasmin/jasmin.cfg
