@@ -4,7 +4,6 @@ import os
 import signal
 import sys
 import syslog
-import memcache
 
 from lockfile import FileLock, LockTimeout, AlreadyLocked
 from twisted.cred import portal

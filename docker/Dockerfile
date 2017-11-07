@@ -9,8 +9,8 @@ ENV JASMIN_VERSION 0.9.25
 
 # Install requirements
 RUN apt-get update && apt-get install -y \
+    build-essential \
     python2.7 \
-    python-pip \
     python-dev \
     libffi-dev \
     libssl-dev \
@@ -19,9 +19,11 @@ RUN apt-get update && apt-get install -y \
     supervisor \
     memcached \
     git \
+    wget \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
-
+RUN wget https://bootstrap.pypa.io/get-pip.py
+RUN python get-pip.py
 # Install Jasmin SMS gateway
 RUN mkdir -p /etc/jasmin/resource \
     /etc/jasmin/store \

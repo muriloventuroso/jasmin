@@ -14,4 +14,5 @@ requests>=2.13.0
 
 pymemcache>=1.4.3
 certifi
+idna
 urllib3>=1.21.1,<1.22
