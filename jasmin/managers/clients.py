@@ -226,9 +226,7 @@ class SMPPClientManagerPB(pb.Avatar):
         and get a listener on submit.sm.%cid queue, this listener will be
         started and stopped when the connector will get started and stopped
         through this API"""
-
         c = pickle.loads(ClientConfig)
-
         self.log.debug('Adding a new connector %s', c.id)
 
         if self.getConnector(c.id) is not None:
@@ -240,7 +238,6 @@ class SMPPClientManagerPB(pb.Avatar):
         if self.amqpBroker.connected == False:
             self.log.error('AMQP Broker channel is not yet ready')
             defer.returnValue(False)
-
         # Declare queues
         # First declare the messaging exchange (has no effect if its already declared)
         yield self.amqpBroker.chan.exchange_declare(exchange='messaging', type='topic')

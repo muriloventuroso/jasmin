@@ -30,7 +30,7 @@ from jasmin.queues.factory import AmqpFactory
 from jasmin.redis.client import ConnectionWithConfiguration
 from jasmin.redis.configs import RedisForJasminConfig
 from jasmin.memcached.configs import MemcachedForJasminConfig
-from jasmin.memcached.client import ConnectionWithConfiguration
+from jasmin.memcached.client import ConnectionWithConfiguration as MCConnectionWithConfiguration
 from jasmin.routing.configs import RouterPBConfig, deliverSmThrowerConfig, DLRThrowerConfig
 from jasmin.routing.router import RouterPB
 from jasmin.routing.throwers import deliverSmThrower, DLRThrower
@@ -83,7 +83,7 @@ class JasminDaemon(object):
     def startMemcachedClient(self):
         """Start AMQP Broker"""
         MemcachedForJasminConfigInstance = MemcachedForJasminConfig(self.options['config'])
-        self.components['mc'] = yield ConnectionWithConfiguration(MemcachedForJasminConfigInstance)
+        self.components['mc'] = MCConnectionWithConfiguration(MemcachedForJasminConfigInstance)
 
     def stopRedisClient(self):
         """Stop Redis Server"""
