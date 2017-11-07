@@ -22,8 +22,7 @@ RUN apt-get update && apt-get install -y \
     wget \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
-RUN wget https://bootstrap.pypa.io/get-pip.py
-RUN python get-pip.py
+RUN wget https://bootstrap.pypa.io/get-pip.py && python get-pip.py
 # Install Jasmin SMS gateway
 RUN mkdir -p /etc/jasmin/resource \
     /etc/jasmin/store \
