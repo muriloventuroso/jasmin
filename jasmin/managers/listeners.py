@@ -142,7 +142,7 @@ class SMPPClientSMListener(object):
             else:
                 self.submit_retrials[msgid] = 1
 
-            self.qos_last_submit_sm_at = self.redisClient.get('last_submit:%s' % str(self.cid))
+            self.qos_last_submit_sm_at = yield self.redisClient.get('last_submit:%s' % str(self.cid))
             if self.qos_last_submit_sm_at is None:
                 self.qos_last_submit_sm_at = datetime(1970, 1, 1)
             else:
@@ -169,7 +169,7 @@ class SMPPClientSMListener(object):
                     defer.returnValue(False)
 
                 self.qos_last_submit_sm_at = datetime.now()
-                self.redisClient.set('last_submit:%s' % str(self.cid), str(self.qos_last_submit_sm_at))
+                yield self.redisClient.set('last_submit:%s' % str(self.cid), str(self.qos_last_submit_sm_at))
 
             # Verify if message is a SubmitSm PDU
             if isinstance(SubmitSmPDU, SubmitSM) is False:
