@@ -22,6 +22,10 @@ def json_deserializer(key, value, flags):
 
 
 def ConnectionWithConfiguration(_MemcachedForJasminConfig):
-    return Client(
+    client = Client(
         (_MemcachedForJasminConfig.host, _MemcachedForJasminConfig.port), serializer=json_serializer,
         deserializer=json_deserializer)
+    if not client:
+        raise ValueError('Memcached not connect')
+    else:
+        return client

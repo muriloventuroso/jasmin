@@ -16,5 +16,5 @@ class MemcachedForJasminConfig(ConfigFile):
     def __init__(self, config_file=None):
         ConfigFile.__init__(self, config_file)
 
-        self.host = self._get('memcached-client', 'host', '127.0.0.1')
+        self.host = self._get('memcached-client', 'host', '192.168.1.89')
         self.port = self._getint('memcached-client', 'port', 11211)

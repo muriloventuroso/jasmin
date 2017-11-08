@@ -143,8 +143,7 @@ class SMPPClientSMListener(object):
             else:
                 self.submit_retrials[msgid] = 1
 
-            if self.qos_last_submit_sm_at is None:
-                self.qos_last_submit_sm_at = datetime(1970, 1, 1)
+            self.qos_last_submit_sm_at = self.memcachedClient.get('last_submit:%s' % str(self.cid))
 
             if self.SMPPClientFactory.config.submit_sm_throughput > 0:
                 # QoS throttling

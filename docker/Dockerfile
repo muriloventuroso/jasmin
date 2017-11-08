@@ -29,7 +29,8 @@ RUN mkdir -p /etc/jasmin/resource \
     /var/log/jasmin \
   && chown jasmin:jasmin /etc/jasmin/store \
     /var/log/jasmin \
-  && pip install --pre git+https://github.com/muriloventuroso/jasmin.git
+  && pip install -r install-requirements \
+  && python install git+https://github.com/muriloventuroso/jasmin.git
 
 # Change binding host for jcli
 RUN sed -i '/\[jcli\]/a bind=0.0.0.0' /etc/jasmin/jasmin.cfg

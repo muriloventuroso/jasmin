@@ -228,7 +228,6 @@ class SMPPClientManagerPB(pb.Avatar):
         through this API"""
         c = pickle.loads(ClientConfig)
         self.log.debug('Adding a new connector %s', c.id)
-
         if self.getConnector(c.id) is not None:
             self.log.error('Trying to add a new connector with an already existant cid: %s', c.id)
             defer.returnValue(False)
@@ -249,10 +248,8 @@ class SMPPClientManagerPB(pb.Avatar):
         yield self.amqpBroker.chan.queue_bind(queue=submit_sm_queue,
                                               exchange="messaging",
                                               routing_key=routing_key)
-
         # Instanciate smpp client service manager
         serviceManager = SMPPClientService(c, self.config)
-
         # Instanciate a SM listener
         smListener = SMPPClientSMListener(
             config=SMPPClientSMListenerConfig(self.config.config_file),

@@ -21,6 +21,7 @@ script:
 services:
     - rabbitmq
     - redis-server
+    - memcached
 before_script:
     # Test requirements:
     - pip install -r test-requirements
@@ -43,6 +44,7 @@ addons:
     - libffi-dev
     - libssl-dev
     - bc
+    - git
 notifications:
   slack:
     secure: guCY7vL67vUhvNYLzInV/EIPMZ7ciq+/s0UlfmKvGYrjIMwXdgfshgKXdHF194eQ9+f0dF8ea1P1/aGqCE4Q4ULPZ555FbftNy/bVLfUPn01+odorAux3rVNq4ezX2QlQc06DpVS2r7U+grM+MQtNdRjoZIuAeipp3YRhyyuIr8=
