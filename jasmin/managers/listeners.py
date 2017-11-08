@@ -29,18 +29,17 @@ class SMPPClientSMListener(object):
     SubmitSm, DeliverSm and SubmitSm PDUs for a given SMPP connection
     """
 
-    def __init__(self, config, SMPPClientFactory, amqpBroker, redisClient, memcachedClient, RouterPB=None, interceptorpb_client=None):
+    def __init__(self, config, SMPPClientFactory, amqpBroker, redisClient, RouterPB=None, interceptorpb_client=None):
         self.config = config
         self.SMPPClientFactory = SMPPClientFactory
         self.SMPPOperationFactory = SMPPOperationFactory(self.SMPPClientFactory.config)
         self.cid = self.SMPPClientFactory.config.id
         self.amqpBroker = amqpBroker
         self.redisClient = redisClient
-        self.memcachedClient = memcachedClient
         self.RouterPB = RouterPB
         self.interceptorpb_client = interceptorpb_client
         self.submit_sm_q = None
-        self.qos_last_submit_sm_at = self.memcachedClient.get('last_submit:%s' % str(self.cid))
+        self.qos_last_submit_sm_at = None
         self.rejectTimers = {}
         self.submit_retrials = {}
         self.qosTimer = None
@@ -143,7 +142,11 @@ class SMPPClientSMListener(object):
             else:
                 self.submit_retrials[msgid] = 1
 
-            self.qos_last_submit_sm_at = self.memcachedClient.get('last_submit:%s' % str(self.cid))
+            self.qos_last_submit_sm_at = self.redisClient.get('last_submit:%s' % str(self.cid))
+            if self.qos_last_submit_sm_at is None:
+                self.qos_last_submit_sm_at = datetime(1970, 1, 1)
+            else:
+                self.qos_last_submit_sm_at = datetime.strptime(self.qos_last_submit_sm_at, '%Y-%m-%d %H:%M:%S.%f')
 
             if self.SMPPClientFactory.config.submit_sm_throughput > 0:
                 # QoS throttling
@@ -166,7 +169,7 @@ class SMPPClientSMListener(object):
                     defer.returnValue(False)
 
                 self.qos_last_submit_sm_at = datetime.now()
-                self.memcachedClient.set('last_submit:%s' % str(self.cid), self.qos_last_submit_sm_at)
+                self.redisClient.set('last_submit:%s' % str(self.cid), str(self.qos_last_submit_sm_at))
 
             # Verify if message is a SubmitSm PDU
             if isinstance(SubmitSmPDU, SubmitSM) is False:

@@ -21,7 +21,6 @@ script:
 services:
     - rabbitmq
     - redis-server
-    - memcached
 before_script:
     # Test requirements:
     - pip install -r test-requirements

@@ -29,8 +29,6 @@ from jasmin.queues.configs import AmqpConfig
 from jasmin.queues.factory import AmqpFactory
 from jasmin.redis.client import ConnectionWithConfiguration
 from jasmin.redis.configs import RedisForJasminConfig
-from jasmin.memcached.configs import MemcachedForJasminConfig
-from jasmin.memcached.client import ConnectionWithConfiguration as MCConnectionWithConfiguration
 from jasmin.routing.configs import RouterPBConfig, deliverSmThrowerConfig, DLRThrowerConfig
 from jasmin.routing.router import RouterPB
 from jasmin.routing.throwers import deliverSmThrower, DLRThrower
@@ -80,18 +78,9 @@ class JasminDaemon(object):
             yield self.components['rc'].auth(RedisForJasminConfigInstance.password)
             yield self.components['rc'].select(RedisForJasminConfigInstance.dbid)
 
-    def startMemcachedClient(self):
-        """Start AMQP Broker"""
-        MemcachedForJasminConfigInstance = MemcachedForJasminConfig(self.options['config'])
-        self.components['mc'] = MCConnectionWithConfiguration(MemcachedForJasminConfigInstance)
-
     def stopRedisClient(self):
         """Stop Redis Server"""
         return self.components['rc'].disconnect()
-
-    def stopMemcachedClient(self):
-        """Stop Memcached Server"""
-        return self.components['mc'].close()
 
     def startAMQPBrokerService(self):
         """Start AMQP Broker"""
@@ -166,7 +155,6 @@ class JasminDaemon(object):
         # AMQP Broker is used to listen to submit_sm queues and publish to deliver_sm/dlr queues
         self.components['smppcm-pb-factory'].addAmqpBroker(self.components['amqp-broker-factory'])
         self.components['smppcm-pb-factory'].addRedisClient(self.components['rc'])
-        self.components['smppcm-pb-factory'].addMemcachedClient(self.components['mc'])
         self.components['smppcm-pb-factory'].addRouterPB(self.components['router-pb-factory'])
 
         # Add interceptor if enabled:
@@ -367,15 +355,6 @@ class JasminDaemon(object):
             syslog.syslog(syslog.LOG_INFO, "  RedisClient Started.")
 
         ########################################################
-        # Connect to memcached server
-        try:
-            yield self.startMemcachedClient()
-        except Exception, e:
-            syslog.syslog(syslog.LOG_ERR, "  Cannot start MemcachedClient: %s" % e)
-        else:
-            syslog.syslog(syslog.LOG_INFO, "  MemcachedClient Started.")
-
-        ########################################################
         # Start AMQP Broker
         try:
             self.startAMQPBrokerService()
@@ -516,10 +495,6 @@ class JasminDaemon(object):
         if 'rc' in self.components:
             yield self.stopRedisClient()
             syslog.syslog(syslog.LOG_INFO, "  RedisClient stopped.")
-
-        if 'mc' in self.components:
-            yield self.stopMemcachedClient()
-            syslog.syslog(syslog.LOG_INFO, "  MemcachedClient stopped.")
 
         # Shutdown requirements:
         if 'interceptor-pb-client' in self.components:
