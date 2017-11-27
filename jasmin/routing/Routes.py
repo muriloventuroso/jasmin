@@ -222,8 +222,8 @@ class RoundrobinRoute(object):
                     break
             else:
                 connector = connector_sort
-
-        return connector
+        yield connector
+        return
 
 class RandomRoundrobinMORoute(RoundrobinRoute, MORoute):
     """Return one route taken randomly from a pool of
