@@ -85,6 +85,7 @@ class SMPPClientProtocol(twistedSMPPClientProtocol):
             else:
                 # We got a ESME_ROK
                 self.factory.stats.inc('submit_sm_count')
+                self.factory.statsRedis.inc(self.factory.config.id)
 
     def sendPDU(self, pdu):
         twistedSMPPClientProtocol.sendPDU(self, pdu)

@@ -211,8 +211,19 @@ class RoundrobinRoute(object):
     def __str__(self):
         return self._str
 
-    def getConnector(self):
-        return random.choice(self.connector)
+    def getConnector(self, statsRedis=None):
+        connector = None
+        for i in range(len(self.connector)):
+            connector_sort = random.choice(self.connector)
+            if connector.daily_limit != 0 and statsRedis:
+                daily_stat = yield statsRedis.get(connector.cid)
+                if daily_stat <= connector.daily_limit:
+                    connector = connector_sort
+                    break
+            else:
+                connector = connector_sort
+
+        return connector
 
 class RandomRoundrobinMORoute(RoundrobinRoute, MORoute):
     """Return one route taken randomly from a pool of

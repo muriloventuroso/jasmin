@@ -320,8 +320,9 @@ class Connector(jasminApiGeneric):
     _str = 'Generic Connector'
     _repr = '<Generic Connector>'
 
-    def __init__(self, cid):
+    def __init__(self, cid, daily_limit=0):
         self.cid = cid
+        self.daily_limit = daily_limit
         self._str = '%s Connector' % self.type
         self._repr = '<%s Connector>' % self.type
 
@@ -379,8 +380,8 @@ class SmppClientConnector(Connector):
 
     type = 'smppc'
 
-    def __init__(self, cid):
-        Connector.__init__(self, cid)
+    def __init__(self, cid, daily_limit=0):
+        Connector.__init__(self, cid, daily_limit)
 
 
 class SmppServerSystemIdConnector(Connector):

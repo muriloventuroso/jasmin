@@ -15,7 +15,7 @@ from jasmin.vendor.smpp.twisted.server import SMPPBindManager as _SMPPBindManage
 from jasmin.vendor.smpp.twisted.server import SMPPServerFactory as _SMPPServerFactory
 from .error import *
 from .protocol import SMPPClientProtocol, SMPPServerProtocol
-from .stats import SMPPClientStatsCollector, SMPPServerStatsCollector
+from .stats import SMPPClientStatsCollector, SMPPServerStatsCollector, SMPPServerStatsRedis
 from .validation import SmppsCredentialValidator
 
 LOG_CATEGORY_CLIENT_BASE = "smpp.client"
@@ -206,7 +206,7 @@ class SMPPServerFactory(_SMPPServerFactory):
     protocol = SMPPServerProtocol
 
     def __init__(self, config, auth_portal, RouterPB=None, SMPPClientManagerPB=None,
-                 interceptorpb_client=None):
+                 interceptorpb_client=None, RedisClient=None):
         self.config = config
         # A dict of protocol instances for each of the current connections,
         # indexed by system_id
@@ -215,10 +215,13 @@ class SMPPServerFactory(_SMPPServerFactory):
         self.RouterPB = RouterPB
         self.SMPPClientManagerPB = SMPPClientManagerPB
         self.interceptorpb_client = interceptorpb_client
+        self.redisClient = RedisClient
 
         # Setup statistics collector
-        self.stats = SMPPServerStatsCollector().get(cid=self.config.id)
+        self.stats = SMPPServerStatsCollector(redisClient=self.redisClient).get(cid=self.config.id)
         self.stats.set('created_at', datetime.now())
+        self.statsRedis = SMPPServerStatsRedis('gwdaily', self.redisClient)
+        self.statsRedis.set(self.config.id)
 
         # Set up a dedicated logger
         self.log = logging.getLogger(LOG_CATEGORY_SERVER_BASE+".%s" % config.id)
@@ -371,7 +374,7 @@ class SMPPServerFactory(_SMPPServerFactory):
 
             # Get connector from selected route
             self.log.debug("RouterPB selected %s route for this SubmitSmPDU", route)
-            routedConnector = route.getConnector()
+            routedConnector = route.getConnector(self.statsRedis)
             # Is it a failover route ? then check for a bound connector, otherwise don't route
             # The failover route requires at least one connector to be up, no message enqueuing will
             # occur otherwise.

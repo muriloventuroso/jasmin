@@ -216,7 +216,8 @@ class JasminDaemon(object):
             SMPPServerConfigInstance,
             auth_portal=p,
             RouterPB=self.components['router-pb-factory'],
-            SMPPClientManagerPB=self.components['smppcm-pb-factory'])
+            SMPPClientManagerPB=self.components['smppcm-pb-factory'],
+            RedisClient=self.components['rc'])
 
         # Start server
         self.components['smpp-server'] = reactor.listenTCP(

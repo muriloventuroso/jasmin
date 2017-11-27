@@ -1,5 +1,5 @@
 from jasmin.tools.singleton import Singleton
-from jasmin.tools.stats import Stats
+from jasmin.tools.stats import Stats, StatsRedis
 
 
 class ConnectorStatistics(Stats):
@@ -99,3 +99,7 @@ class SMPPServerStatsCollector(object):
             self.connectors[cid] = ServerConnectorStatistics(cid)
 
         return self.connectors[cid]
+
+
+class SMPPServerStatsRedis(StatsRedis):
+    pass
