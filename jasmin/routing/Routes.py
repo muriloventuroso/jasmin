@@ -69,7 +69,7 @@ class Route(object):
     def __repr__(self):
         return self.__class__.__name__
 
-    def getConnector(self):
+    def getConnector(self, statsRedis=None):
         return self.connector
 
     def getRate(self):
@@ -215,15 +215,15 @@ class RoundrobinRoute(object):
         connector = None
         for i in range(len(self.connector)):
             connector_sort = random.choice(self.connector)
-            if connector.daily_limit != 0 and statsRedis:
-                daily_stat = yield statsRedis.get(connector.cid)
-                if daily_stat <= connector.daily_limit:
+            daily_limit = statsRedis.hget('connector:%s' % connector_sort, 'daily_limit')
+            if daily_limit and int(daily_limit) != 0 and statsRedis:
+                daily_stat = statsRedis.get(connector_sort.cid)
+                if int(daily_stat) <= int(daily_limit):
                     connector = connector_sort
                     break
             else:
                 connector = connector_sort
-        yield connector
-        return
+        return connector
 
 class RandomRoundrobinMORoute(RoundrobinRoute, MORoute):
     """Return one route taken randomly from a pool of
@@ -289,12 +289,23 @@ class FailoverRoute(object):
     def __str__(self):
         return self._str
 
-    def getConnector(self):
-        try:
-            self.seq += 1
-            return self.connector[self.seq]
-        except IndexError:
-            return None
+    def getConnector(self, statsRedis=None):
+        connector = None
+        for i in range(len(self.connector)):
+            try:
+                self.seq += 1
+                connector_sort = self.connector[self.seq]
+                daily_limit = statsRedis.hget('connector:%s' % connector_sort, 'daily_limit')
+                if daily_limit and int(daily_limit) != 0 and statsRedis:
+                    daily_stat = statsRedis.get(connector_sort.cid)
+                    if int(daily_stat) <= int(daily_limit):
+                        connector = connector_sort
+                        break
+                else:
+                    connector = connector_sort
+            except IndexError:
+                break
+        return connector
 
 
 class FailoverMORoute(FailoverRoute, MORoute):
@@ -316,7 +327,7 @@ class FailoverMORoute(FailoverRoute, MORoute):
         if not isinstance(connectors, list):
             raise InvalidRouteParameterError("connectors must be a list")
 
-    def getConnectors(self):
+    def getConnectors(self, statsRedis=None):
         return self.connector
 
     def matchFilters(self, routable):

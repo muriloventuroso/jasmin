@@ -103,6 +103,9 @@ class JCliSMPPClientConfig(SMPPClientConfig):
 
         return r
 
+    def __getitem__(self, item):
+        return getattr(self, item)
+
 
 def SMPPClientConfigBuild(fCallback):
     """Parse args and try to build a JCliSMPPClientConfig instance to pass it to fCallback"""

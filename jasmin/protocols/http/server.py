@@ -2,6 +2,7 @@ import cPickle as pickle
 import json
 import logging
 import re
+import redis
 import binascii
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler
@@ -22,7 +23,10 @@ from .errors import (AuthenticationError, ServerError, RouteNotFoundError, Conne
                      InterceptorNotConnectedError, InterceptorRunError)
 from .stats import HttpAPIStatsCollector
 from .validation import UrlArgsValidator, HttpAPICredentialValidator
-
+from jasmin.tools.stats import StatsRedis
+redis_db = redis.ConnectionPool(
+    host='127.0.0.1', port=6379, db=0)
+rd = redis.Redis(connection_pool=redis_db)
 LOG_CATEGORY = "jasmin-http-api"
 
 # @TODO make it configurable
@@ -80,6 +84,7 @@ class Send(Resource):
         self.SMPPClientManagerPB = SMPPClientManagerPB
         self.RouterPB = RouterPB
         self.stats = stats
+        self.statsRedis = StatsRedis('gwdaily', rd)
         self.log = log
         self.interceptorpb_client = interceptorpb_client
 
@@ -193,7 +198,7 @@ class Send(Resource):
 
             # Get connector from selected route
             self.log.debug("RouterPB selected %s route for this SubmitSmPDU", route)
-            routedConnector = route.getConnector()
+            routedConnector = route.getConnector(statsRedis=self.statsRedis)
             # Is it a failover route ? then check for a bound connector, otherwise don't route
             # The failover route requires at least one connector to be up, no message enqueuing will
             # occur otherwise.
@@ -211,7 +216,7 @@ class Send(Resource):
                         break
                     else:
                         # Check next connector, None if no more connectors are available
-                        routedConnector = route.getConnector()
+                        routedConnector = route.getConnector(statsRedis=self.statsRedis)
                         if routedConnector is None:
                             break
 

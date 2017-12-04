@@ -44,39 +44,40 @@ class Stats(object):
 
 
 class StatsRedis(object):
-    def init(self, key, RedisClient, expire=True):
+    def __init__(self, key, RedisClient, expire=True):
         self.redisClient = RedisClient
         self.key = key
+        self.expire = expire
 
     def set(self, key, value):
-        gwdaily = yield self.redisClient.hgetall(self.key)
+        gwdaily = self.redisClient.hgetall(self.key)
         if not gwdaily:
-            yield self.redisClient.hset(self.key, str(key), value)
+            self.redisClient.hset(self.key, str(key), value)
             if self.expire:
-                yield self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
+                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
 
     def get(self, key):
 
-        exists = yield self.redisClient.exists(self.key)
+        exists = self.redisClient.exists(self.key)
         if not exists:
-            yield self.redisClient.hset(self.key, str(key), 0)
+            self.redisClient.hset(self.key, str(key), 0)
             if self.expire:
-                yield self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
-        yield self.redisClient.hget(self.key, key)
+                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
+        return self.redisClient.hget(self.key, key)
 
     def inc(self, key, inc=1):
 
-        exists = yield self.redisClient.exists(self.key)
+        exists = self.redisClient.exists(self.key)
         if not exists:
-            yield self.redisClient.hset(self.key, str(key), 0)
+            self.redisClient.hset(self.key, str(key), 0)
             if self.expire:
-                yield self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
-        yield self.redisClient.hincrby(self.key, str(key), inc)
+                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
+        self.redisClient.hincrby(self.key, str(key), inc)
 
     def dec(self, key, inc=1):
-        exists = yield self.redisClient.exists(self.key)
+        exists = self.redisClient.exists(self.key)
         if not exists:
-            yield self.redisClient.hset(self.key, str(key), 0)
+            self.redisClient.hset(self.key, str(key), 0)
             if self.expire:
-                yield self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
-        yield self.redisClient.hincrby(self.key, str(key), -inc)
+                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
+        self.redisClient.hincrby(self.key, str(key), -inc)

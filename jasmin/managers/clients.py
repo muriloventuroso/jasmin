@@ -263,6 +263,8 @@ class SMPPClientManagerPB(pb.Avatar):
             'consumer_tag': None,
             'submit_sm_q':  None,
             'sm_listener':  smListener})
+        if hasattr(self.config, 'daily_limit'):
+            self.redisClient.hset('connector:%s' % c.id, 'daily_limit', self.config.daily_limit)
 
         self.log.info('Added a new connector: %s', c.id)
 

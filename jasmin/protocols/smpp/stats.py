@@ -102,4 +102,5 @@ class SMPPServerStatsCollector(object):
 
 
 class SMPPServerStatsRedis(StatsRedis):
-    pass
+    def __init__(self, key, RedisClient, expire=True):
+        StatsRedis.__init__(self, key, RedisClient, expire=True)

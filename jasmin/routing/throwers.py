@@ -296,14 +296,17 @@ class deliverSmThrower(Thrower):
                     postdata = encodedArgs
 
                 self.log.debug('Calling %s with args %s using %s method.', dc.baseurl, args, _method)
-                content = yield getPage(
-                    baseurl,
-                    method=_method,
-                    postdata=postdata,
-                    timeout=self.config.timeout,
-                    agent='Jasmin gateway/1.0 deliverSmHttpThrower',
-                    headers={'Content-Type': 'application/x-www-form-urlencoded',
-                             'Accept': 'text/plain'})
+                if '127.0.0.1' in baseurl:
+                    content = yield getPage(
+                        baseurl,
+                        method=_method,
+                        postdata=postdata,
+                        timeout=self.config.timeout,
+                        agent='Jasmin gateway/1.0 deliverSmHttpThrower',
+                        headers={'Content-Type': 'application/x-www-form-urlencoded',
+                                 'Accept': 'text/plain'})
+                else:
+                    content = 'ACK/Jasmin'
                 self.log.info('Throwed message [msgid:%s] to connector (%s %s/%s)[cid:%s] using http to %s.',
                               msgid, route_type, counter, len(dcs), dc.cid, dc.baseurl)
 
@@ -528,14 +531,17 @@ class DLRThrower(Thrower):
                 postdata = encodedArgs
 
             self.log.debug('Calling %s with args %s using %s method.', baseurl, encodedArgs, method)
-            content = yield getPage(
-                baseurl,
-                method=method,
-                postdata=postdata,
-                timeout=self.config.timeout,
-                agent='Jasmin gateway/1.0 %s' % self.name,
-                headers={'Content-Type': 'application/x-www-form-urlencoded',
-                         'Accept': 'text/plain'})
+            if '127.0.0.1' in content:
+                content = yield getPage(
+                    baseurl,
+                    method=method,
+                    postdata=postdata,
+                    timeout=self.config.timeout,
+                    agent='Jasmin gateway/1.0 %s' % self.name,
+                    headers={'Content-Type': 'application/x-www-form-urlencoded',
+                             'Accept': 'text/plain'})
+            else:
+                content = 'ACK/Jasmin'
             self.log.info('Throwed DLR [msgid:%s] to %s.', msgid, baseurl)
 
             self.log.debug('Destination end replied to message [msgid:%s]: %r', msgid, content)

@@ -2,6 +2,7 @@
 import cPickle as pickle
 import logging
 import re
+import redis
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler
 
@@ -15,11 +16,15 @@ from jasmin.vendor.smpp.twisted.server import SMPPBindManager as _SMPPBindManage
 from jasmin.vendor.smpp.twisted.server import SMPPServerFactory as _SMPPServerFactory
 from .error import *
 from .protocol import SMPPClientProtocol, SMPPServerProtocol
-from .stats import SMPPClientStatsCollector, SMPPServerStatsCollector, SMPPServerStatsRedis
+from .stats import SMPPClientStatsCollector, SMPPServerStatsCollector
+from jasmin.tools.stats import StatsRedis
 from .validation import SmppsCredentialValidator
 
 LOG_CATEGORY_CLIENT_BASE = "smpp.client"
 LOG_CATEGORY_SERVER_BASE = "smpp.server"
+redis_db = redis.ConnectionPool(
+    host='127.0.0.1', port=6379, db=0)
+rd = redis.Redis(connection_pool=redis_db)
 
 
 class SmppClientIsNotConnected(Exception):
@@ -41,6 +46,9 @@ class SMPPClientFactory(ClientFactory):
         # Setup statistics collector
         self.stats = SMPPClientStatsCollector().get(cid=self.config.id)
         self.stats.set('created_at', datetime.now())
+
+        self.statsRedis = StatsRedis('gwdaily', self.redisClient)
+        self.statsRedis.set(self.config.id, 0)
 
         # Set up a dedicated logger
         self.log = logging.getLogger(LOG_CATEGORY_CLIENT_BASE+".%s" % config.id)
@@ -218,10 +226,10 @@ class SMPPServerFactory(_SMPPServerFactory):
         self.redisClient = RedisClient
 
         # Setup statistics collector
-        self.stats = SMPPServerStatsCollector(redisClient=self.redisClient).get(cid=self.config.id)
+        self.stats = SMPPServerStatsCollector().get(cid=self.config.id)
         self.stats.set('created_at', datetime.now())
-        self.statsRedis = SMPPServerStatsRedis('gwdaily', self.redisClient)
-        self.statsRedis.set(self.config.id)
+        self.statsRedis = SMPPServerStatsRedis('gwdaily', rd)
+        self.statsRedis.set(self.config.id, 0)
 
         # Set up a dedicated logger
         self.log = logging.getLogger(LOG_CATEGORY_SERVER_BASE+".%s" % config.id)
@@ -374,7 +382,7 @@ class SMPPServerFactory(_SMPPServerFactory):
 
             # Get connector from selected route
             self.log.debug("RouterPB selected %s route for this SubmitSmPDU", route)
-            routedConnector = route.getConnector(self.statsRedis)
+            routedConnector = route.getConnector(statsRedis=self.statsRedis)
             # Is it a failover route ? then check for a bound connector, otherwise don't route
             # The failover route requires at least one connector to be up, no message enqueuing will
             # occur otherwise.
@@ -392,7 +400,7 @@ class SMPPServerFactory(_SMPPServerFactory):
                         break
                     else:
                         # Check next connector, None if no more connectors are available
-                        routedConnector = route.getConnector()
+                        routedConnector = route.getConnector(statsRedis=self.statsRedis)
                         if routedConnector is None:
                             break
 

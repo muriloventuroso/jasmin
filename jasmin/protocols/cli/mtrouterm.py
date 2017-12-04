@@ -133,8 +133,7 @@ def MTRouteBuild(fCallback):
                                 raise Exception('Unknown smppc cid: %s' % (cid))
 
                             # Make instance of SmppClientConnector
-                            connector = self.pb['smppcm'].getConnector(cid)
-                            arg = SmppClientConnector(connector['id'], connector['config']['daily_limit'])
+                            arg = SmppClientConnector(self.pb['smppcm'].getConnector(cid)['id'])
                         else:
                             raise NotImplementedError("Not implemented yet !")
                     except Exception, e:
