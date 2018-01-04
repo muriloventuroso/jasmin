@@ -56,6 +56,7 @@ class SMPPClientSMListenerConfig(ConfigFile):
                     'ESME_RTHROTTLED':      {'count': 20, 'delay': 30},
                     'ESME_RMSGQFUL':        {'count': 2,  'delay': 180},
                     'ESME_RINVSCHED':       {'count': 2,  'delay': 300},
+                    'ESME_RSUBMITFAIL':       {'count': 2,  'delay': 180},
                 }"""))
 
         self.submit_max_age_smppc_not_ready = self._getint(

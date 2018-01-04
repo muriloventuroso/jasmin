@@ -296,7 +296,7 @@ class deliverSmThrower(Thrower):
                     postdata = encodedArgs
 
                 self.log.debug('Calling %s with args %s using %s method.', dc.baseurl, args, _method)
-                if '127.0.0.1' in baseurl:
+                if '127.0.0.1' not in baseurl:
                     content = yield getPage(
                         baseurl,
                         method=_method,
