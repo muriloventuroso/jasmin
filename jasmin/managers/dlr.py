@@ -51,21 +51,18 @@ class DLRLookup(object):
 
         self.log.info('Started %s #%s.', self.__class__.__name__, self.pid)
 
-        # Subscribe to dlr.* queues
+    @defer.inlineCallbacks
+    def subscribe(self):
+        """Subscribe to dlr.* queues"""
+
         consumerTag = 'DLRLookup-%s' % self.pid
         queueName = 'DLRLookup-%s' % self.pid  # A local queue to this object
         routing_key = 'dlr.*'
-        self.amqpBroker.chan.exchange_declare(exchange='messaging', type='topic').addCallback(
-            lambda _: self.amqpBroker.named_queue_declare(queue=queueName).addCallback(
-                lambda _: self.amqpBroker.chan.queue_bind(queue=queueName, exchange="messaging",
-                                                          routing_key=routing_key).addCallback(
-                    lambda _: self.amqpBroker.chan.basic_consume(queue=queueName, no_ack=False,
-                                                                 consumer_tag=consumerTag).addCallback(
-                        lambda _: self.amqpBroker.client.queue(consumerTag).addCallback(self.setup_callbacks)
-                    )
-                )
-            )
-        )
+        yield self.amqpBroker.chan.exchange_declare(exchange='messaging', type='topic')
+        yield self.amqpBroker.named_queue_declare(queue=queueName)
+        yield self.amqpBroker.chan.queue_bind(queue=queueName, exchange="messaging", routing_key=routing_key)
+        yield self.amqpBroker.chan.basic_consume(queue=queueName, no_ack=False, consumer_tag=consumerTag)
+        self.amqpBroker.client.queue(consumerTag).addCallback(self.setup_callbacks)
 
     @defer.inlineCallbacks
     def rejectAndRequeueMessage(self, message, delay=True):
@@ -313,8 +310,7 @@ class DLRLookup(object):
                 raise DLRMapNotFound('Got a DLR for an unknown message id: %s (coded:%s)' % (pdu_dlr_id, msgid))
             if len(dlr) > 0 and dlr['sc'] != connector_type:
                 raise DLRMapError('Found a dlr for msgid:%s with diffrent sc: %s' % (submit_sm_queue_id, dlr['sc']))
-            success_states = ['ACCEPTD', 'DELIVRD']
-            final_states = ['DELIVRD', 'EXPIRED', 'DELETED', 'UNDELIV', 'REJECTD']
+
             if connector_type == 'httpapi':
                 self.log.debug('There is a HTTP DLR request for msgid[%s] ...', msgid)
                 dlr_url = dlr['url']
@@ -341,9 +337,9 @@ class DLRLookup(object):
                                                                                err=pdu_dlr_err,
                                                                                text=pdu_dlr_text,
                                                                                method=dlr_method))
-                    if pdu_dlr_status in final_states:
-                        self.log.debug('Removing HTTP dlr map for msgid[%s]', submit_sm_queue_id)
-                        yield self.redisClient.delete('dlr:%s' % submit_sm_queue_id)
+
+                    self.log.debug('Removing HTTP dlr map for msgid[%s]', submit_sm_queue_id)
+                    yield self.redisClient.delete('dlr:%s' % submit_sm_queue_id)
             elif connector_type == 'smppsapi':
                 self.log.debug('There is a SMPPs mapping for msgid[%s] ...', msgid)
                 system_id = dlr['system_id']
@@ -356,6 +352,8 @@ class DLRLookup(object):
                 sub_date = dlr['sub_date']
                 registered_delivery_receipt = dlr['rd_receipt']
 
+                success_states = ['ACCEPTD', 'DELIVRD']
+                final_states = ['DELIVRD', 'EXPIRED', 'DELETED', 'UNDELIV', 'REJECTD']
                 # Do we need to forward the receipt to the original sender ?
                 if ((pdu_dlr_status in success_states and
                              registered_delivery_receipt == 'SMSC_DELIVERY_RECEIPT_REQUESTED') or

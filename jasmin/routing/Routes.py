@@ -1,4 +1,4 @@
-#pylint: disable=W0401,W0611,W0231
+# pylint: disable=W0401,W0611,W0231
 """
 More info: http://docs.jasminsms.com/en/latest/routing/index.html
 """
@@ -15,10 +15,13 @@ class InvalidRouteParameterError(Exception):
     """Raised when a parameter is not an instance of a desired class (used for
     validating inputs
     """
+
+
 class InvalidRouteFilterError(Exception):
     """Raised when a route is instanciated with a non-compatible type, e.g. an MORoute
     can not have UserFilter (MO messages are not authentified).
     """
+
 
 class Route(object):
     """Generic Route:
@@ -46,7 +49,7 @@ class Route(object):
             if not isinstance(_filter, Filter):
                 raise InvalidRouteParameterError(
                     "filter must be an instance of Filter, %s found" % type(_filter)
-                    )
+                )
             if not self.type in _filter.usedFor:
                 raise InvalidRouteFilterError(
                     "filter types (%s) is not compatible with this route type (%s)" % (
@@ -69,7 +72,7 @@ class Route(object):
     def __repr__(self):
         return self.__class__.__name__
 
-    def getConnector(self, statsRedis=None):
+    def getConnector(self):
         return self.connector
 
     def getRate(self):
@@ -122,6 +125,7 @@ class Route(object):
                 return False
         return True
 
+
 class DefaultRoute(Route):
     """This is a default route which can contain one connector
     """
@@ -151,10 +155,12 @@ class DefaultRoute(Route):
     def matchFilters(self, routable):
         return self.getConnector()
 
+
 class MTRoute(Route):
     """Generic MT Route
     """
     type = 'mt'
+
 
 class MORoute(Route):
     """Generic MO Route
@@ -166,17 +172,21 @@ class MORoute(Route):
 
         Route.__init__(self, filters, connector, 0.0)
 
+
 class StaticMORoute(MORoute):
     """Return one unique route
     """
+
 
 class StaticMTRoute(MTRoute):
     """Return one unique route
     """
 
+
 class RoundrobinRoute(object):
     """Generic RoundrobinRoute
     """
+
     def __init__(self, filters, connectors):
         if not isinstance(connectors, list):
             raise InvalidRouteParameterError("connectors must be a list")
@@ -211,29 +221,21 @@ class RoundrobinRoute(object):
     def __str__(self):
         return self._str
 
-    def getConnector(self, statsRedis=None):
-        connector = None
-        for i in range(len(self.connector)):
-            connector_sort = random.choice(self.connector)
-            daily_limit = statsRedis.hget('connector:%s' % connector_sort, 'daily_limit')
-            if daily_limit and int(daily_limit) != 0 and statsRedis:
-                daily_stat = statsRedis.get(connector_sort.cid)
-                if int(daily_stat) <= int(daily_limit):
-                    connector = connector_sort
-                    break
-            else:
-                connector = connector_sort
-        return connector
+    def getConnector(self):
+        return random.choice(self.connector)
+
 
 class RandomRoundrobinMORoute(RoundrobinRoute, MORoute):
     """Return one route taken randomly from a pool of
     routes
     """
 
+
 class RandomRoundrobinMTRoute(RoundrobinRoute, MTRoute):
     """Return one route taken randomly from a pool of
     routes
     """
+
     def __init__(self, filters, connectors, rate):
         "Overriding RoundrobinRoute's __init__ to add rate parameter as it is only used for MT Routes"
 
@@ -252,8 +254,10 @@ class RandomRoundrobinMTRoute(RoundrobinRoute, MTRoute):
             rate_str = '\nNOT RATED'
         self._str = "%s %s" % (self._str, rate_str)
 
+
 class FailoverRoute(object):
     """Generic FailoverRoute"""
+
     def __init__(self, filters, connectors):
         if not isinstance(connectors, list):
             raise InvalidRouteParameterError("connectors must be a list")
@@ -289,23 +293,12 @@ class FailoverRoute(object):
     def __str__(self):
         return self._str
 
-    def getConnector(self, statsRedis=None):
-        connector = None
-        for i in range(len(self.connector)):
-            try:
-                self.seq += 1
-                connector_sort = self.connector[self.seq]
-                daily_limit = statsRedis.hget('connector:%s' % connector_sort, 'daily_limit')
-                if daily_limit and int(daily_limit) != 0 and statsRedis:
-                    daily_stat = statsRedis.get(connector_sort.cid)
-                    if int(daily_stat) <= int(daily_limit):
-                        connector = connector_sort
-                        break
-                else:
-                    connector = connector_sort
-            except IndexError:
-                break
-        return connector
+    def getConnector(self):
+        try:
+            self.seq += 1
+            return self.connector[self.seq]
+        except IndexError:
+            return None
 
 
 class FailoverMORoute(FailoverRoute, MORoute):
@@ -327,7 +320,7 @@ class FailoverMORoute(FailoverRoute, MORoute):
         if not isinstance(connectors, list):
             raise InvalidRouteParameterError("connectors must be a list")
 
-    def getConnectors(self, statsRedis=None):
+    def getConnectors(self):
         return self.connector
 
     def matchFilters(self, routable):
@@ -372,6 +365,7 @@ class BestQualityMTRoute(MTRoute):
         * (submit_sm / submit_sm_resp) ratio
         * (delivered submits / underlivered submits)
     """
+
     def __init__(self, filters, connector, rate):
         MTRoute.__init__(self, filters, connector, rate)
         raise NotImplementedError

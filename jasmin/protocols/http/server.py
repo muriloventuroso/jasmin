@@ -2,7 +2,6 @@ import cPickle as pickle
 import json
 import logging
 import re
-import redis
 import binascii
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler
@@ -23,10 +22,7 @@ from .errors import (AuthenticationError, ServerError, RouteNotFoundError, Conne
                      InterceptorNotConnectedError, InterceptorRunError)
 from .stats import HttpAPIStatsCollector
 from .validation import UrlArgsValidator, HttpAPICredentialValidator
-from jasmin.tools.stats import StatsRedis
-redis_db = redis.ConnectionPool(
-    host='127.0.0.1', port=6379, db=0)
-rd = redis.Redis(connection_pool=redis_db)
+
 LOG_CATEGORY = "jasmin-http-api"
 
 # @TODO make it configurable
@@ -84,7 +80,6 @@ class Send(Resource):
         self.SMPPClientManagerPB = SMPPClientManagerPB
         self.RouterPB = RouterPB
         self.stats = stats
-        self.statsRedis = StatsRedis('gwdaily', rd)
         self.log = log
         self.interceptorpb_client = interceptorpb_client
 
@@ -133,7 +128,8 @@ class Send(Resource):
                 source_addr=None if 'from' not in updated_request.args else updated_request.args['from'][0],
                 destination_addr=updated_request.args['to'][0],
                 short_message=short_message,
-                data_coding=int(updated_request.args['coding'][0]))
+                data_coding=int(updated_request.args['coding'][0]),
+                custom_tlvs=updated_request.args['custom_tlvs'][0])
             self.log.debug("Built base SubmitSmPDU: %s", SubmitSmPDU)
 
             # Make Credential validation
@@ -144,7 +140,7 @@ class Send(Resource):
             SubmitSmPDU = v.updatePDUWithUserDefaults(SubmitSmPDU)
 
             # Prepare for interception then routing
-            routedConnector = None # init
+            routedConnector = None  # init
             routable = RoutableSubmitSm(SubmitSmPDU, user)
             self.log.debug("Built Routable %s for SubmitSmPDU: %s", routable, SubmitSmPDU)
 
@@ -198,7 +194,7 @@ class Send(Resource):
 
             # Get connector from selected route
             self.log.debug("RouterPB selected %s route for this SubmitSmPDU", route)
-            routedConnector = route.getConnector(statsRedis=self.statsRedis)
+            routedConnector = route.getConnector()
             # Is it a failover route ? then check for a bound connector, otherwise don't route
             # The failover route requires at least one connector to be up, no message enqueuing will
             # occur otherwise.
@@ -216,7 +212,7 @@ class Send(Resource):
                         break
                     else:
                         # Check next connector, None if no more connectors are available
-                        routedConnector = route.getConnector(statsRedis=self.statsRedis)
+                        routedConnector = route.getConnector()
                         if routedConnector is None:
                             break
 
@@ -238,7 +234,7 @@ class Send(Resource):
                 routable.pdu.params['priority_flag'] = priority_flag_value_map[priority]
             self.log.debug("SubmitSmPDU priority is set to %s", priority)
 
-	    # Set schedule_delivery_time
+            # Set schedule_delivery_time
             if 'sdt' in updated_request.args:
                 routable.pdu.params['schedule_delivery_time'] = parse(updated_request.args['sdt'][0])
                 self.log.debug(
@@ -291,7 +287,8 @@ class Send(Resource):
                 dlr_method = None
 
             # QoS throttling
-            if user.mt_credential.getQuota('http_throughput') >= 0 and user.getCnxStatus().httpapi['qos_last_submit_sm_at'] != 0:
+            if user.mt_credential.getQuota('http_throughput') >= 0 and user.getCnxStatus().httpapi[
+                'qos_last_submit_sm_at'] != 0:
                 qos_throughput_second = 1 / float(user.mt_credential.getQuota('http_throughput'))
                 qos_throughput_ysecond_td = timedelta(microseconds=qos_throughput_second * 1000000)
                 qos_delay = datetime.now() - user.getCnxStatus().httpapi['qos_last_submit_sm_at']
@@ -344,6 +341,7 @@ class Send(Resource):
             # Send SubmitSmPDU through smpp client manager PB server
             self.log.debug("Connector '%s' is set to be a route for this SubmitSmPDU", routedConnector.cid)
             c = self.SMPPClientManagerPB.perspective_submit_sm(
+                uid=user.uid,
                 cid=routedConnector.cid,
                 SubmitSmPDU=routable.pdu,
                 submit_sm_bill=bill,
@@ -363,7 +361,7 @@ class Send(Resource):
                 self.stats.set('last_success_at', datetime.now())
                 self.log.debug('SubmitSmPDU sent to [cid:%s], result = %s', routedConnector.cid, c.result)
                 response = {'return': c.result, 'status': 200}
-        except Exception, e:
+        except Exception as e:
             self.log.error("Error: %s", e)
 
             if hasattr(e, 'code'):
@@ -414,27 +412,43 @@ class Send(Resource):
 
         try:
             # Validation (must have almost the same params as /rate service)
-            fields = {'to'          : {'optional': False, 'pattern': re.compile(r'^\+{0,1}\d+$')},
-                      'from'        : {'optional': True},
-                      'coding'      : {'optional': True, 'pattern': re.compile(r'^(0|1|2|3|4|5|6|7|8|9|10|13|14){1}$')},
-                      'username'    : {'optional': False, 'pattern': re.compile(r'^.{1,15}$')},
-                      'password'    : {'optional': False, 'pattern': re.compile(r'^.{1,8}$')},
+            fields = {'to': {'optional': False, 'pattern': re.compile(r'^\+{0,1}\d+$')},
+                      'from': {'optional': True},
+                      'coding': {'optional': True, 'pattern': re.compile(r'^(0|1|2|3|4|5|6|7|8|9|10|13|14){1}$')},
+                      'username': {'optional': False, 'pattern': re.compile(r'^.{1,15}$')},
+                      'password': {'optional': False, 'pattern': re.compile(r'^.{1,8}$')},
                       # Priority validation pattern can be validated/filtered further more
                       # through HttpAPICredentialValidator
-                      'priority'    : {'optional': True, 'pattern': re.compile(r'^[0-3]$')},
-                      'sdt'         : {'optional': True, 'pattern': re.compile(r'^\d{2}\d{2}\d{2}\d{2}\d{2}\d{2}\d{1}\d{2}(\+|-|R)$')},
+                      'priority': {'optional': True, 'pattern': re.compile(r'^[0-3]$')},
+                      'sdt': {'optional': True,
+                              'pattern': re.compile(r'^\d{2}\d{2}\d{2}\d{2}\d{2}\d{2}\d{1}\d{2}(\+|-|R)$')},
                       # Validity period validation pattern can be validated/filtered further more
                       # through HttpAPICredentialValidator
-                      'validity-period' : {'optional': True, 'pattern': re.compile(r'^\d+$')},
-                      'dlr'         : {'optional': False, 'pattern': re.compile(r'^(yes|no)$')},
-                      'dlr-url'     : {'optional': True, 'pattern': re.compile(r'^(http|https)\://.*$')},
+                      'validity-period': {'optional': True, 'pattern': re.compile(r'^\d+$')},
+                      'dlr': {'optional': False, 'pattern': re.compile(r'^(yes|no)$')},
+                      'dlr-url': {'optional': True, 'pattern': re.compile(r'^(http|https)\://.*$')},
                       # DLR Level validation pattern can be validated/filtered further more
                       # through HttpAPICredentialValidator
                       'dlr-level'   : {'optional': True, 'pattern': re.compile(r'^[1-3]$')},
                       'dlr-method'  : {'optional': True, 'pattern': re.compile(r'^(get|post)$', re.IGNORECASE)},
                       'tags'        : {'optional': True, 'pattern': re.compile(r'^([-a-zA-Z0-9,])*$')},
                       'content'     : {'optional': True},
-                      'hex-content' : {'optional': True}}
+                      'hex-content' : {'optional': True},
+                      'custom_tlvs' : {'optional': True}}
+
+            if updated_request.getHeader('content-type') == 'application/json':
+                json_body = updated_request.content.read()
+                json_data = json.loads(json_body)
+                for key, value in json_data.items():
+                    # Make the values look like they came from form encoding all surrounded by [ ]
+                    if isinstance(value, unicode):
+                        value = value.encode()
+
+                    updated_request.args[key.encode()] = [value]
+
+            # If no custom TLVs present, defaujlt to an [] which will be passed down to SubmitSM
+            if 'custom_tlvs' not in updated_request.args:
+                updated_request.args['custom_tlvs'] = [[]]
 
             # Default coding is 0 when not provided
             if 'coding' not in updated_request.args:
@@ -473,7 +487,7 @@ class Send(Resource):
 
             # Continue routing in a separate thread
             reactor.callFromThread(self.route_routable, updated_request=updated_request)
-        except Exception, e:
+        except Exception as e:
             self.log.error("Error: %s", e)
 
             if hasattr(e, 'code'):
@@ -626,7 +640,7 @@ class Rate(Resource):
                     'unit_rate': bill.getTotalAmounts(),
                     'submit_sm_count': submit_sm_count},
                 'status': 200}
-        except Exception, e:
+        except Exception as e:
             self.log.error("Error: %s", e)
 
             if hasattr(e, 'code'):
@@ -663,20 +677,20 @@ class Rate(Resource):
 
         try:
             # Validation (must be almost the same params as /send service)
-            fields = {'to'          : {'optional': False, 'pattern': re.compile(r'^\+{0,1}\d+$')},
-                      'from'        : {'optional': True},
-                      'coding'      : {'optional': True, 'pattern': re.compile(r'^(0|1|2|3|4|5|6|7|8|9|10|13|14){1}$')},
-                      'username'    : {'optional': False, 'pattern': re.compile(r'^.{1,15}$')},
-                      'password'    : {'optional': False, 'pattern': re.compile(r'^.{1,8}$')},
+            fields = {'to': {'optional': False, 'pattern': re.compile(r'^\+{0,1}\d+$')},
+                      'from': {'optional': True},
+                      'coding': {'optional': True, 'pattern': re.compile(r'^(0|1|2|3|4|5|6|7|8|9|10|13|14){1}$')},
+                      'username': {'optional': False, 'pattern': re.compile(r'^.{1,15}$')},
+                      'password': {'optional': False, 'pattern': re.compile(r'^.{1,8}$')},
                       # Priority validation pattern can be validated/filtered further more
                       # through HttpAPICredentialValidator
-                      'priority'    : {'optional': True, 'pattern': re.compile(r'^[0-3]$')},
+                      'priority': {'optional': True, 'pattern': re.compile(r'^[0-3]$')},
                       # Validity period validation pattern can be validated/filtered further more
                       # through HttpAPICredentialValidator
-                      'validity-period' :{'optional': True, 'pattern': re.compile(r'^\d+$')},
-                      'tags'        : {'optional': True, 'pattern': re.compile(r'^([-a-zA-Z0-9,])*$')},
-                      'content'     : {'optional': True},
-                      'hex-content' : {'optional': True},
+                      'validity-period': {'optional': True, 'pattern': re.compile(r'^\d+$')},
+                      'tags': {'optional': True, 'pattern': re.compile(r'^([-a-zA-Z0-9,])*$')},
+                      'content': {'optional': True},
+                      'hex-content': {'optional': True},
                       }
 
             # Default coding is 0 when not provided
@@ -698,7 +712,7 @@ class Rate(Resource):
 
             # Continue routing in a separate thread
             reactor.callFromThread(self.route_routable, request=request)
-        except Exception, e:
+        except Exception as e:
             self.log.error("Error: %s", e)
 
             if hasattr(e, 'code'):
@@ -746,8 +760,8 @@ class Balance(Resource):
 
         try:
             # Validation
-            fields = {'username'    : {'optional': False, 'pattern': re.compile(r'^.{1,15}$')},
-                      'password'    : {'optional': False, 'pattern': re.compile(r'^.{1,8}$')}}
+            fields = {'username': {'optional': False, 'pattern': re.compile(r'^.{1,15}$')},
+                      'password': {'optional': False, 'pattern': re.compile(r'^.{1,8}$')}}
 
             # Make validation
             v = UrlArgsValidator(request, fields)
@@ -786,7 +800,7 @@ class Balance(Resource):
             if sms_count is None:
                 sms_count = 'ND'
             response = {'return': {'balance': balance, 'sms_count': sms_count}, 'status': 200}
-        except Exception, e:
+        except Exception as e:
             self.log.error("Error: %s", e)
 
             if hasattr(e, 'code'):
@@ -827,7 +841,6 @@ class Ping(Resource):
 
 
 class HTTPApi(Resource):
-
     def __init__(self, RouterPB, SMPPClientManagerPB, config, interceptor=None):
         Resource.__init__(self)
 

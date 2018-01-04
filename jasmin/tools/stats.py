@@ -1,6 +1,3 @@
-from datetime import datetime, time
-
-
 class KeyNotFound(Exception):
     """
     Raised when setting or getting an unknown statistics key
@@ -41,43 +38,3 @@ class Stats(object):
             raise KeyNotIncrementable(key)
 
         self._stats[key] -= inc
-
-
-class StatsRedis(object):
-    def __init__(self, key, RedisClient, expire=True):
-        self.redisClient = RedisClient
-        self.key = key
-        self.expire = expire
-
-    def set(self, key, value):
-        gwdaily = self.redisClient.hgetall(self.key)
-        if not gwdaily:
-            self.redisClient.hset(self.key, str(key), value)
-            if self.expire:
-                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
-
-    def get(self, key):
-
-        exists = self.redisClient.exists(self.key)
-        if not exists:
-            self.redisClient.hset(self.key, str(key), 0)
-            if self.expire:
-                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
-        return self.redisClient.hget(self.key, key)
-
-    def inc(self, key, inc=1):
-
-        exists = self.redisClient.exists(self.key)
-        if not exists:
-            self.redisClient.hset(self.key, str(key), 0)
-            if self.expire:
-                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
-        self.redisClient.hincrby(self.key, str(key), inc)
-
-    def dec(self, key, inc=1):
-        exists = self.redisClient.exists(self.key)
-        if not exists:
-            self.redisClient.hset(self.key, str(key), 0)
-            if self.expire:
-                self.redisClient.expireat(self.key, datetime.combine(datetime.now(), time.max))
-        self.redisClient.hincrby(self.key, str(key), -inc)

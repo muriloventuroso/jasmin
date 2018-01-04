@@ -1,8 +1,7 @@
-#pylint: disable=W0401,W0611,W0231
+# pylint: disable=W0401,W0611,W0231
 import cPickle as pickle
 import logging
 import re
-import redis
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler
 
@@ -17,14 +16,10 @@ from jasmin.vendor.smpp.twisted.server import SMPPServerFactory as _SMPPServerFa
 from .error import *
 from .protocol import SMPPClientProtocol, SMPPServerProtocol
 from .stats import SMPPClientStatsCollector, SMPPServerStatsCollector
-from jasmin.tools.stats import StatsRedis
 from .validation import SmppsCredentialValidator
 
 LOG_CATEGORY_CLIENT_BASE = "smpp.client"
 LOG_CATEGORY_SERVER_BASE = "smpp.server"
-redis_db = redis.ConnectionPool(
-    host='127.0.0.1', port=6379, db=0)
-rd = redis.Redis(connection_pool=redis_db)
 
 
 class SmppClientIsNotConnected(Exception):
@@ -47,11 +42,8 @@ class SMPPClientFactory(ClientFactory):
         self.stats = SMPPClientStatsCollector().get(cid=self.config.id)
         self.stats.set('created_at', datetime.now())
 
-        self.statsRedis = StatsRedis('gwdaily', self.redisClient)
-        self.statsRedis.set(self.config.id, 0)
-
         # Set up a dedicated logger
-        self.log = logging.getLogger(LOG_CATEGORY_CLIENT_BASE+".%s" % config.id)
+        self.log = logging.getLogger(LOG_CATEGORY_CLIENT_BASE + ".%s" % config.id)
         if len(self.log.handlers) != 1:
             self.log.setLevel(config.log_level)
             _when = self.config.log_rotate if hasattr(self.config, 'log_rotate') else 'midnight'
@@ -198,7 +190,6 @@ class SMPPClientFactory(ClientFactory):
 
 
 class CtxFactory(ssl.ClientContextFactory):
-
     def __init__(self, config):
         self.smppConfig = config
 
@@ -214,7 +205,7 @@ class SMPPServerFactory(_SMPPServerFactory):
     protocol = SMPPServerProtocol
 
     def __init__(self, config, auth_portal, RouterPB=None, SMPPClientManagerPB=None,
-                 interceptorpb_client=None, RedisClient=None):
+                 interceptorpb_client=None):
         self.config = config
         # A dict of protocol instances for each of the current connections,
         # indexed by system_id
@@ -223,16 +214,13 @@ class SMPPServerFactory(_SMPPServerFactory):
         self.RouterPB = RouterPB
         self.SMPPClientManagerPB = SMPPClientManagerPB
         self.interceptorpb_client = interceptorpb_client
-        self.redisClient = RedisClient
 
         # Setup statistics collector
         self.stats = SMPPServerStatsCollector().get(cid=self.config.id)
         self.stats.set('created_at', datetime.now())
-        self.statsRedis = SMPPServerStatsRedis('gwdaily', rd)
-        self.statsRedis.set(self.config.id, 0)
 
         # Set up a dedicated logger
-        self.log = logging.getLogger(LOG_CATEGORY_SERVER_BASE+".%s" % config.id)
+        self.log = logging.getLogger(LOG_CATEGORY_SERVER_BASE + ".%s" % config.id)
         if len(self.log.handlers) != 1:
             self.log.setLevel(config.log_level)
             handler = TimedRotatingFileHandler(filename=self.config.log_file, when=self.config.log_rotate)
@@ -382,7 +370,7 @@ class SMPPServerFactory(_SMPPServerFactory):
 
             # Get connector from selected route
             self.log.debug("RouterPB selected %s route for this SubmitSmPDU", route)
-            routedConnector = route.getConnector(statsRedis=self.statsRedis)
+            routedConnector = route.getConnector()
             # Is it a failover route ? then check for a bound connector, otherwise don't route
             # The failover route requires at least one connector to be up, no message enqueuing will
             # occur otherwise.
@@ -400,7 +388,7 @@ class SMPPServerFactory(_SMPPServerFactory):
                         break
                     else:
                         # Check next connector, None if no more connectors are available
-                        routedConnector = route.getConnector(statsRedis=self.statsRedis)
+                        routedConnector = route.getConnector()
                         if routedConnector is None:
                             break
 
@@ -411,7 +399,7 @@ class SMPPServerFactory(_SMPPServerFactory):
 
             # QoS throttling
             if (routable.user.mt_credential.getQuota('smpps_throughput') >= 0
-                    and routable.user.getCnxStatus().smpps['qos_last_submit_sm_at'] != 0):
+                and routable.user.getCnxStatus().smpps['qos_last_submit_sm_at'] != 0):
                 qos_throughput_second = 1 / float(routable.user.mt_credential.getQuota('smpps_throughput'))
                 qos_throughput_ysecond_td = timedelta(microseconds=qos_throughput_second * 1000000)
                 qos_delay = datetime.now() - routable.user.getCnxStatus().smpps['qos_last_submit_sm_at']
@@ -465,6 +453,7 @@ class SMPPServerFactory(_SMPPServerFactory):
             # Send SubmitSmPDU through smpp client manager PB server
             self.log.debug("Connector '%s' is set to be a route for this SubmitSmPDU", routedConnector.cid)
             c = self.SMPPClientManagerPB.perspective_submit_sm(
+                uid=routable.user.uid,
                 cid=routedConnector.cid,
                 SubmitSmPDU=routable.pdu,
                 submit_sm_bill=bill,
@@ -488,7 +477,7 @@ class SMPPServerFactory(_SMPPServerFactory):
                 SubmitSmRoutingError) as e:
             # Known exception handling
             status = e.status
-        except Exception, e:
+        except Exception as e:
             # Unknown exception handling
             self.log.critical('Got an unknown exception: %s', e)
             status = pdu_types.CommandStatus.ESME_RUNKNOWNERR

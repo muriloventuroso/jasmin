@@ -33,7 +33,6 @@ class SMPPClientSMListener(object):
         self.config = config
         self.SMPPClientFactory = SMPPClientFactory
         self.SMPPOperationFactory = SMPPOperationFactory(self.SMPPClientFactory.config)
-        self.cid = self.SMPPClientFactory.config.id
         self.amqpBroker = amqpBroker
         self.redisClient = redisClient
         self.RouterPB = RouterPB
@@ -142,11 +141,8 @@ class SMPPClientSMListener(object):
             else:
                 self.submit_retrials[msgid] = 1
 
-            self.qos_last_submit_sm_at = yield self.redisClient.get('last_submit:%s' % str(self.cid))
             if self.qos_last_submit_sm_at is None:
                 self.qos_last_submit_sm_at = datetime(1970, 1, 1)
-            else:
-                self.qos_last_submit_sm_at = datetime.strptime(self.qos_last_submit_sm_at, '%Y-%m-%d %H:%M:%S.%f')
 
             if self.SMPPClientFactory.config.submit_sm_throughput > 0:
                 # QoS throttling
@@ -169,7 +165,6 @@ class SMPPClientSMListener(object):
                     defer.returnValue(False)
 
                 self.qos_last_submit_sm_at = datetime.now()
-                yield self.redisClient.set('last_submit:%s' % str(self.cid), str(self.qos_last_submit_sm_at))
 
             # Verify if message is a SubmitSm PDU
             if isinstance(SubmitSmPDU, SubmitSM) is False:
@@ -243,12 +238,12 @@ class SMPPClientSMListener(object):
                            msgid, self.SMPPClientFactory.config.id)
             self.rejectAndRequeueMessage(message)
             defer.returnValue(False)
-        except LongSubmitSmTransactionError, e:
+        except LongSubmitSmTransactionError as e:
             self.log.error("Long SubmitSmPDU[%s] error in [cid:%s], message requeued: %s",
                            msgid, self.SMPPClientFactory.config.id, e.message)
             self.rejectAndRequeueMessage(message)
             defer.returnValue(False)
-        except Exception, e:
+        except Exception as e:
             self.log.critical("Rejecting SubmitSmPDU[%s] through [cid:%s] for an unknown error (%s): %s",
                               msgid, self.SMPPClientFactory.config.id, type(e), e)
             self.rejectMessage(message)
@@ -256,7 +251,7 @@ class SMPPClientSMListener(object):
 
     @defer.inlineCallbacks
     def submit_sm_resp_event(self, r, amqpMessage):
-        msgid = amqpMessage.content.properties['message-id'].lower()
+        msgid = amqpMessage.content.properties['message-id']
         total_bill_amount = None
         will_be_retried = False
 
@@ -395,7 +390,7 @@ class SMPPClientSMListener(object):
                 yield self.amqpBroker.publish(exchange='messaging',
                                               routing_key=amqpMessage.content.properties['reply-to'],
                                               content=content)
-        except Exception, e:
+        except Exception as e:
             self.log.error('(%s) while handling submit_sm_resp pdu for msgid:%s: %s', type(e), msgid, e)
         else:
             if will_be_retried:
@@ -414,7 +409,7 @@ class SMPPClientSMListener(object):
             # - the qosTimer has been cancelled (self.clearQosTimer())
             try:
                 error.raiseException()
-            except Exception, e:
+            except Exception as e:
                 self.log.error("Error in submit_sm_errback (%s): %s", type(e), e)
 
     @defer.inlineCallbacks
@@ -612,6 +607,12 @@ class SMPPClientSMListener(object):
                             UDHI_INDICATOR_SET = True
                             break
 
+                not_class2 = True
+                if 'data_coding' in routable.pdu.params:
+                    dcs = routable.pdu.params['data_coding']
+                    if (str(dcs.scheme) == 'GSM_MESSAGE_CLASS') and (dcs.schemeData is not None):
+                        not_class2 = (str(dcs.schemeData.msgClass) != 'CLASS_2')
+
                 splitMethod = None
                 # Is it a part of a long message ?
                 if 'sar_msg_ref_num' in routable.pdu.params:
@@ -622,7 +623,7 @@ class SMPPClientSMListener(object):
                     self.log.debug(
                         'Received SMS-MO part [queue-msgid:%s] using SAR: ttl_segments=%s, segment_sn=%s, msgref=%s',
                         msgid, total_segments, segment_seqnum, msg_ref_num)
-                elif UDHI_INDICATOR_SET and message_content[:3] == '\x05\x00\x03':
+                elif UDHI_INDICATOR_SET and not_class2 and message_content[:3] == '\x05\x00\x03':
                     splitMethod = 'udh'
                     total_segments = struct.unpack('!B', message_content[4])[0]
                     segment_seqnum = struct.unpack('!B', message_content[5])[0]
@@ -714,7 +715,7 @@ class SMPPClientSMListener(object):
 
             # Known exception handling
             defer.returnValue(DataHandlerResponse(status=e.status))
-        except Exception, e:
+        except Exception as e:
             # Unknown exception handling
             self.log.critical('Got an unknown exception (%s): %s', type(e), e)
             defer.returnValue(DataHandlerResponse(status=CommandStatus.ESME_RUNKNOWNERR))
