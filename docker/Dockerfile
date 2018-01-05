@@ -14,9 +14,6 @@ RUN apt-get update && apt-get install -y \
     python-dev \
     libffi-dev \
     libssl-dev \
-    rabbitmq-server \
-    redis-server \
-    supervisor \
     git \
     wget \
   && apt-get clean \
