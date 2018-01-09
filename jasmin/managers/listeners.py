@@ -239,6 +239,7 @@ class SMPPClientSMListener(object):
             self.rejectAndRequeueMessage(message)
             defer.returnValue(False)
         except LongSubmitSmTransactionError as e:
+            import traceback; traceback.print_exc();
             self.log.error("Long SubmitSmPDU[%s] error in [cid:%s], message requeued: %s",
                            msgid, self.SMPPClientFactory.config.id, e.message)
             self.rejectAndRequeueMessage(message)
