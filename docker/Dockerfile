@@ -1,41 +1,9 @@
-FROM debian:jessie
+FROM jookies/jasmin
 
-MAINTAINER Jookies LTD <jasmin@jookies.net>
+RUN apt-get update && apt-get install git -y \
+&& apt-get clean \
+&& rm -rf /var/lib/apt/lists/*
 
-# add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
-RUN groupadd -r jasmin && useradd -r -g jasmin jasmin
+RUN pip install git+https://github.com/muriloventuroso/jasmin.git -y
 
-ENV JASMIN_VERSION 0.9.26
-
-# Install requirements
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python2.7 \
-    python-dev \
-    libffi-dev \
-    libssl-dev \
-    wget \
-    git \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
-RUN wget https://bootstrap.pypa.io/get-pip.py && python get-pip.py
-# Install Jasmin SMS gateway
-RUN mkdir -p /etc/jasmin/resource \
-    /etc/jasmin/store \
-    /var/log/jasmin \
-  && chown jasmin:jasmin /etc/jasmin/store \
-    /var/log/jasmin \
-  && pip install git+https://github.com/muriloventuroso/jasmin.git
-
-# Change binding host for jcli
-RUN sed -i '/\[jcli\]/a bind=0.0.0.0' /etc/jasmin/jasmin.cfg
-
-EXPOSE 2775 8990 1401
-VOLUME ["/var/log/jasmin", "/etc/jasmin", "/etc/jasmin/store"]
-
-COPY docker-entrypoint.sh /
-ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["jasmind.py", "--enable-interceptor-client", "--enable-dlr-thrower", "--enable-dlr-lookup", "-u", "jcliadmin", "-p", "jclipwd", "-c", "/etc/jasmin/jasmin.cfg"]
-# Notes:
-# - jasmind is started with native dlr-thrower and dlr-lookup threads instead of standalone processes
-# - restapi (0.9rc16+) is not started in this docker configuration

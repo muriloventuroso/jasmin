@@ -427,7 +427,8 @@ class SMPPProtocolBase( protocol.Protocol ):
 
         if self.isBound() and not self.connectionCorrupted:
             self.log.warning("Shutdown requested...unbinding")
-            self.unbind().addBoth(lambda result: self.disconnect())
+            #self.unbind().addBoth(lambda result: self.disconnect())
+            self.disconnect()
         elif self.sessionState not in (SMPPSessionStates.UNBIND_RECEIVED, SMPPSessionStates.UNBIND_PENDING):
             self.log.warning("Shutdown requested...disconnecting")
             self.disconnect()
@@ -558,7 +559,8 @@ class SMPPProtocolBase( protocol.Protocol ):
 
         Result is a Deferred object
         """
-        return self.unbind().addBoth(lambda result: self.disconnect())
+        #return self.unbind().addBoth(lambda result: self.disconnect())
+        return self.disconnect()
 
     def disconnect(self):
         """Disconnect from SMSC
