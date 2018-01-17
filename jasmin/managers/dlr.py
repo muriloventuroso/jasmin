@@ -339,7 +339,7 @@ class DLRLookup(object):
                                                                                err=pdu_dlr_err,
                                                                                text=pdu_dlr_text,
                                                                                method=dlr_method))
-                    if dlr_level == 3 and pdu_dlr_status in final_states:
+                    if dlr_level == 2 or pdu_dlr_status in final_states:
                         self.log.debug('Removing HTTP dlr map for msgid[%s]', submit_sm_queue_id)
                         yield self.redisClient.delete('dlr:%s' % submit_sm_queue_id)
             elif connector_type == 'smppsapi':
