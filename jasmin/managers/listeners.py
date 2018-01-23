@@ -136,10 +136,17 @@ class SMPPClientSMListener(object):
             self.log.debug("Callbacked a submit_sm with a SubmitSmPDU[%s] (?): %s", msgid, SubmitSmPDU)
 
             # Update submit_sm retrial tracker
-            if msgid in self.submit_retrials:
+            '''if msgid in self.submit_retrials:
                 self.submit_retrials[msgid] += 1
             else:
-                self.submit_retrials[msgid] = 1
+                self.submit_retrials[msgid] = 1'''
+            n_retry = yield self.redisClient.get('retrial:%s' % msgid)
+            if not n_retry:
+                yield self.redisClient.set('retrial:%s' % msgid, 1)
+                n_retry = 1
+            else:
+                yield self.redisClient.set('retrial:%s' % msgid, int(n_retry) + 1)
+                n_retry += 1
 
             if self.qos_last_submit_sm_at is None:
                 self.qos_last_submit_sm_at = datetime(1970, 1, 1)
@@ -188,7 +195,7 @@ class SMPPClientSMListener(object):
                 if msgAge.seconds > self.config.submit_max_age_smppc_not_ready:
                     self.log.error(
                         "SMPPC [cid:%s] is not connected: Discarding (#%s) SubmitSmPDU[%s], over-aged %s seconds.",
-                        self.SMPPClientFactory.config.id, self.submit_retrials[msgid],
+                        self.SMPPClientFactory.config.id, n_retry,
                         msgid, msgAge.seconds)
                     yield self.rejectMessage(message)
                     defer.returnValue(False)
@@ -199,7 +206,7 @@ class SMPPClientSMListener(object):
                         delay_str = ''
                     self.log.error(
                         "SMPPC [cid:%s] is not connected: Requeuing (#%s) SubmitSmPDU[%s]%s, aged %s seconds.",
-                        self.SMPPClientFactory.config.id, self.submit_retrials[msgid],
+                        self.SMPPClientFactory.config.id, n_retry,
                         msgid, delay_str, msgAge.seconds)
                     yield self.rejectAndRequeueMessage(message,
                                                        delay=self.config.submit_retrial_delay_smppc_not_ready)
@@ -211,7 +218,7 @@ class SMPPClientSMListener(object):
                 if msgAge.seconds > self.config.submit_max_age_smppc_not_ready:
                     self.log.error(
                         "SMPPC [cid:%s] is not bound: Discarding (#%s) SubmitSmPDU[%s], over-aged %s seconds.",
-                        self.SMPPClientFactory.config.id, self.submit_retrials[msgid],
+                        self.SMPPClientFactory.config.id, n_retry,
                         msgid, msgAge.seconds)
                     yield self.rejectMessage(message)
                     defer.returnValue(False)
@@ -221,7 +228,7 @@ class SMPPClientSMListener(object):
                     else:
                         delay_str = ''
                     self.log.error("SMPPC [cid:%s] is not bound: Requeuing (#%s) SubmitSmPDU[%s]%s, aged %s seconds.",
-                                   self.SMPPClientFactory.config.id, self.submit_retrials[msgid],
+                                   self.SMPPClientFactory.config.id, n_retry,
                                    msgid, delay_str, msgAge)
                     yield self.rejectAndRequeueMessage(
                         message, delay=self.config.submit_retrial_delay_smppc_not_ready)
@@ -262,7 +269,8 @@ class SMPPClientSMListener(object):
 
             if r.response.status == CommandStatus.ESME_ROK:
                 # No more retrials !
-                del self.submit_retrials[msgid]
+                # del self.submit_retrials[msgid]
+                yield self.redisClient.delete('retrial:%s' % msgid)
 
                 # Get bill information
                 total_bill_amount = 0.0
@@ -326,13 +334,16 @@ class SMPPClientSMListener(object):
                     retrial = self.config.submit_error_retrial[str(r.response.status)]
 
                     # Still have some retries to go ?
-                    if self.submit_retrials[msgid] < retrial['count']:
+                    # if self.submit_retrials[msgid] < retrial['count']:
+                    n_retry = yield self.redisClient.get('retrial:%s' % msgid)
+                    if n_retry and int(n_retry) < retrial['count']:
                         # Requeue the message for later redelivery
                         yield self.rejectAndRequeueMessage(amqpMessage, delay=retrial['delay'])
                         will_be_retried = True
                     else:
                         # Prevent this list from over-growing
-                        del self.submit_retrials[msgid]
+                        # del self.submit_retrials[msgid]
+                        yield self.redisClient.delete('retrial:%s' % msgid)
 
                 # Log the message
                 self.log.info(
